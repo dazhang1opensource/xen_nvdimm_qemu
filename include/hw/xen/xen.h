@@ -10,6 +10,7 @@
 
 #include "qemu-common.h"
 #include "exec/cpu-common.h"
+#include "hw/acpi/aml-build.h"
 #include "hw/irq.h"
 
 /* xen-machine.c */
@@ -47,5 +48,8 @@ void xen_ram_alloc(ram_addr_t ram_addr, ram_addr_t size,
 void xen_hvm_modified_memory(ram_addr_t start, ram_addr_t length);
 
 void xen_register_framebuffer(struct MemoryRegion *mr);
+
+void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
+                    MachineState *machine);
 
 #endif /* QEMU_HW_XEN_H */

@@ -11,6 +11,7 @@
 #include "qemu/osdep.h"
 
 #include "cpu.h"
+#include "hw/acpi/aml-build.h"
 #include "hw/pci/pci.h"
 #include "hw/i386/pc.h"
 #include "hw/i386/apic-msidef.h"
@@ -1472,4 +1473,24 @@ void qmp_xen_set_global_dirty_log(bool enable, Error **errp)
     } else {
         memory_global_dirty_log_stop();
     }
+}
+
+void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
+                    MachineState *machine)
+{
+    PCMachineState *pcms = PC_MACHINE(machine);
+    GArray *tables_blob = tables->table_data;
+    unsigned int rsdt;
+
+    if (!pcms->acpi_build_enabled) {
+        return;
+    }
+
+    /*
+     * QEMU RSDP and RSDT are only used by hvmloader to enumerate
+     * QEMU-built tables. HVM domains still use Xen-built RSDP and RSDT.
+     */
+    rsdt = tables_blob->len;
+    build_rsdt(tables_blob, tables->linker, table_offsets, 0, 0);
+    build_rsdp(tables->rsdp, tables->linker, rsdt);
 }
