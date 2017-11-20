@@ -60,6 +60,7 @@
 #include "qom/qom-qobject.h"
 #include "hw/i386/amd_iommu.h"
 #include "hw/i386/intel_iommu.h"
+#include "hw/xen/xen.h"
 
 #include "hw/acpi/ipmi.h"
 
@@ -2588,7 +2589,7 @@ build_amd_iommu(GArray *table_data, BIOSLinker *linker)
                  "IVRS", table_data->len - iommu_start, 1, NULL, NULL);
 }
 
-static GArray *
+GArray *
 build_rsdp(GArray *rsdp_table, BIOSLinker *linker, unsigned rsdt_tbl_offset)
 {
     AcpiRsdpDescriptor *rsdp = acpi_data_push(rsdp_table, sizeof *rsdp);
@@ -2677,6 +2678,11 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
                              ACPI_BUILD_TABLE_FILE, tables_blob,
                              64 /* Ensure FACS is aligned */,
                              false /* high memory */);
+
+    if (xen_enabled()) {
+        xen_acpi_build(tables, table_offsets, machine);
+        goto done;
+    }
 
     /*
      * FACS is pointed to by FADT.
@@ -2820,6 +2826,7 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
 
     acpi_align_size(tables->linker->cmd_blob, ACPI_BUILD_ALIGN_SIZE);
 
+ done:
     /* Cleanup memory that's no longer used. */
     g_array_free(table_offsets, true);
 }
