@@ -14,6 +14,7 @@
 #include "hw/pci/pci.h"
 #include "hw/i386/pc.h"
 #include "hw/i386/apic-msidef.h"
+#include "hw/loader.h"
 #include "hw/xen/xen_common.h"
 #include "hw/xen/xen_backend.h"
 #include "qmp-commands.h"
@@ -1234,6 +1235,14 @@ static void xen_wakeup_notifier(Notifier *notifier, void *data)
     xc_set_hvm_param(xen_xc, xen_domid, HVM_PARAM_ACPI_S_STATE, 0);
 }
 
+static void xen_fw_cfg_init(PCMachineState *pcms)
+{
+    FWCfgState *fw_cfg = fw_cfg_init_io(FW_CFG_IO_BASE);
+
+    rom_set_fw(fw_cfg);
+    pcms->fw_cfg = fw_cfg;
+}
+
 void xen_hvm_init(PCMachineState *pcms, MemoryRegion **ram_memory)
 {
     int i, rc;
@@ -1384,6 +1393,9 @@ void xen_hvm_init(PCMachineState *pcms, MemoryRegion **ram_memory)
 
     /* Disable ACPI build because Xen handles it */
     pcms->acpi_build_enabled = false;
+    if (pcms->acpi_build_enabled) {
+        xen_fw_cfg_init(pcms);
+    }
 
     return;
 
