@@ -61,3 +61,8 @@ void xen_hvm_init(PCMachineState *pcms, MemoryRegion **ram_memory)
 void qmp_xen_set_global_dirty_log(bool enable, Error **errp)
 {
 }
+
+void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
+                    MachineState *machine)
+{
+}

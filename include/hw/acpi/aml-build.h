@@ -393,4 +393,8 @@ void build_srat_memory(AcpiSratMemoryAffinity *numamem, uint64_t base,
                        uint64_t len, int node, MemoryAffinityFlags flags);
 
 void build_slit(GArray *table_data, BIOSLinker *linker);
+
+GArray *build_rsdp(GArray *rsdp_table, BIOSLinker *linker,
+                   unsigned rsdt_tbl_offset);
+
 #endif
