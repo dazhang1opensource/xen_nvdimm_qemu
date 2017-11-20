@@ -1306,9 +1306,14 @@ void xen_load_linux(PCMachineState *pcms)
 
     assert(MACHINE(pcms)->kernel_filename != NULL);
 
-    fw_cfg = fw_cfg_init_io(FW_CFG_IO_BASE);
-    fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, pcms->boot_cpus);
-    rom_set_fw(fw_cfg);
+    /* fw_cfg may have been initialized by xen_fw_cfg_init(). */
+    if (!pcms->fw_cfg) {
+        fw_cfg = fw_cfg_init_io(FW_CFG_IO_BASE);
+        fw_cfg_add_i16(fw_cfg, FW_CFG_NB_CPUS, pcms->boot_cpus);
+        rom_set_fw(fw_cfg);
+    } else {
+        fw_cfg = pcms->fw_cfg;
+    }
 
     load_linux(pcms, fw_cfg);
     for (i = 0; i < nb_option_roms; i++) {
@@ -1317,7 +1322,9 @@ void xen_load_linux(PCMachineState *pcms)
                !strcmp(option_rom[i].name, "multiboot.bin"));
         rom_add_option(option_rom[i].name, option_rom[i].bootindex);
     }
-    pcms->fw_cfg = fw_cfg;
+    if (!pcms->fw_cfg) {
+        pcms->fw_cfg = fw_cfg;
+    }
 }
 
 void pc_memory_hotplug_init(PCMachineState *pcms, MemoryRegion *system_memory)
