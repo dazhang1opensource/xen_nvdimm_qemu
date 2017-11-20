@@ -1236,6 +1236,11 @@ static void xen_wakeup_notifier(Notifier *notifier, void *data)
     xc_set_hvm_param(xen_xc, xen_domid, HVM_PARAM_ACPI_S_STATE, 0);
 }
 
+static bool xen_dm_acpi_build_enabled(PCMachineState *pcms)
+{
+    return pcms->acpi_nvdimm_state.is_enabled;
+}
+
 static void xen_fw_cfg_init(PCMachineState *pcms)
 {
     FWCfgState *fw_cfg = fw_cfg_init_io(FW_CFG_IO_BASE);
@@ -1392,8 +1397,7 @@ void xen_hvm_init(PCMachineState *pcms, MemoryRegion **ram_memory)
     xen_be_register_common();
     xen_read_physmap(state);
 
-    /* Disable ACPI build because Xen handles it */
-    pcms->acpi_build_enabled = false;
+    pcms->acpi_build_enabled = xen_dm_acpi_build_enabled(pcms);;
     if (pcms->acpi_build_enabled) {
         xen_fw_cfg_init(pcms);
     }
@@ -1484,6 +1488,11 @@ void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
 
     if (!pcms->acpi_build_enabled) {
         return;
+    }
+
+    if (pcms->acpi_nvdimm_state.is_enabled) {
+        nvdimm_build_acpi(table_offsets, tables_blob, tables->linker,
+                          &pcms->acpi_nvdimm_state, machine->ram_slots);
     }
 
     /*
