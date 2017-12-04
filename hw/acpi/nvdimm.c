@@ -493,6 +493,7 @@ struct NvdimmFuncReadFITOut {
     /* the size of buffer filled by QEMU. */
     uint32_t len;
     uint32_t func_ret_status; /* return status code. */
+    uint32_t reserved;
     uint8_t fit[0]; /* the FIT data. */
 } QEMU_PACKED;
 typedef struct NvdimmFuncReadFITOut NvdimmFuncReadFITOut;
@@ -597,6 +598,7 @@ exit:
 
     read_fit_out->len = cpu_to_le32(size);
     read_fit_out->func_ret_status = cpu_to_le32(func_ret_status);
+    read_fit_out->reserved = 0;
     memcpy(read_fit_out->fit, fit->data + read_fit->offset, read_len);
 
     nvdimm_copy_to_dsm_mem(dsm_mem_addr, read_fit_out, size);
@@ -1168,7 +1170,8 @@ static void nvdimm_build_fit(Aml *dev)
 
     aml_append(method, aml_store(aml_sizeof(buf), buf_size));
     aml_append(method, aml_subtract(buf_size,
-                                    aml_int(4) /* the size of "STAU" */,
+                                    aml_int(8) /* the size of "STAU" and the
+                                                  consequent reserved field */,
                                     buf_size));
 
     /* if we read the end of fit. */
@@ -1177,7 +1180,7 @@ static void nvdimm_build_fit(Aml *dev)
     aml_append(method, ifctx);
 
     aml_append(method, aml_create_field(buf,
-                            aml_int(4 * BITS_PER_BYTE), /* offset at byte 4.*/
+                            aml_int(8 * BITS_PER_BYTE), /* offset at byte 8. */
                             aml_shiftleft(buf_size, aml_int(3)), "BUFF"));
     aml_append(method, aml_return(aml_name("BUFF")));
     aml_append(dev, method);
