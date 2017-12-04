@@ -1494,3 +1494,58 @@ void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
     build_rsdt(tables_blob, tables->linker, table_offsets, 0, 0);
     build_rsdp(tables->rsdp, tables->linker, rsdt);
 }
+
+static size_t xen_rw_guest(ram_addr_t gpa,
+                           void *buf, size_t length, bool is_write)
+{
+    size_t copied = 0, size;
+    ram_addr_t s, e, offset, cur = gpa;
+    xen_pfn_t cur_pfn;
+    void *page;
+    int prot = is_write ? PROT_WRITE : PROT_READ;
+
+    if (!buf || !length) {
+        return 0;
+    }
+
+    s = gpa & TARGET_PAGE_MASK;
+    e = gpa + length;
+    if (e < s) {
+        return 0;
+    }
+
+    while (cur < e) {
+        cur_pfn = cur >> TARGET_PAGE_BITS;
+        offset = cur - (cur_pfn << TARGET_PAGE_BITS);
+        size = MIN(length, TARGET_PAGE_SIZE - offset);
+
+        page = xenforeignmemory_map(xen_fmem, xen_domid, prot, 1, &cur_pfn, NULL);
+        if (!page) {
+            break;
+        }
+
+        if (is_write) {
+            memcpy(page + offset, buf, size);
+        } else {
+            memcpy(buf, page + offset, size);
+        }
+        xenforeignmemory_unmap(xen_fmem, page, 1);
+
+        copied += size;
+        buf += size;
+        cur += size;
+        length -= size;
+    }
+
+    return copied;
+}
+
+size_t xen_copy_to_guest(ram_addr_t gpa, void *buf, size_t length)
+{
+    return xen_rw_guest(gpa, buf, length, true);
+}
+
+size_t xen_copy_from_guest(ram_addr_t gpa, void *buf, size_t length)
+{
+    return xen_rw_guest(gpa, buf, length, false);
+}
