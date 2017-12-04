@@ -52,4 +52,7 @@ void xen_register_framebuffer(struct MemoryRegion *mr);
 void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
                     MachineState *machine);
 
+size_t xen_copy_to_guest(ram_addr_t gpa, void *buf, size_t length);
+size_t xen_copy_from_guest(ram_addr_t gpa, void *buf, size_t length);
+
 #endif /* QEMU_HW_XEN_H */
