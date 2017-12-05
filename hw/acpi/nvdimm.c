@@ -32,6 +32,7 @@
 #include "hw/acpi/bios-linker-loader.h"
 #include "hw/nvram/fw_cfg.h"
 #include "hw/mem/nvdimm.h"
+#include "hw/xen/xen.h"
 
 static int nvdimm_device_list(Object *obj, void *opaque)
 {
@@ -497,6 +498,35 @@ struct NvdimmFuncReadFITOut {
 typedef struct NvdimmFuncReadFITOut NvdimmFuncReadFITOut;
 QEMU_BUILD_BUG_ON(sizeof(NvdimmFuncReadFITOut) > NVDIMM_DSM_MEMORY_SIZE);
 
+/*
+ * Xen hvmloader can load QEMU-built NVDIMM ACPI tables via the
+ * BIOSLinkerLoader interface, but it allocates memory in an area not
+ * covered by any memory regions in QEMU, i.e., the hvmloader memory
+ * cannot be accessed via the normal cpu_physical_memory_{read,write}().
+ * If QEMU on Xen has to access the hvmloader memory in DSM emulation,
+ * it has to take a different path, i.e., xen_copy_{from,to}_guest().
+ */
+
+static void
+nvdimm_copy_from_dsm_mem(hwaddr dsm_mem_addr, void *dst, unsigned size)
+{
+    if (xen_enabled()) {
+        xen_copy_from_guest(dsm_mem_addr, dst, size);
+    } else {
+        cpu_physical_memory_read(dsm_mem_addr, dst, size);
+    }
+}
+
+static void
+nvdimm_copy_to_dsm_mem(hwaddr dsm_mem_addr, void *src, unsigned size)
+{
+    if (xen_enabled()) {
+        xen_copy_to_guest(dsm_mem_addr, src, size);
+    } else {
+        cpu_physical_memory_write(dsm_mem_addr, src, size);
+    }
+}
+
 static void
 nvdimm_dsm_function0(uint32_t supported_func, hwaddr dsm_mem_addr)
 {
@@ -504,7 +534,7 @@ nvdimm_dsm_function0(uint32_t supported_func, hwaddr dsm_mem_addr)
         .len = cpu_to_le32(sizeof(func0)),
         .supported_func = cpu_to_le32(supported_func),
     };
-    cpu_physical_memory_write(dsm_mem_addr, &func0, sizeof(func0));
+    nvdimm_copy_to_dsm_mem(dsm_mem_addr, &func0, sizeof(func0));
 }
 
 static void
@@ -514,7 +544,7 @@ nvdimm_dsm_no_payload(uint32_t func_ret_status, hwaddr dsm_mem_addr)
         .len = cpu_to_le32(sizeof(out)),
         .func_ret_status = cpu_to_le32(func_ret_status),
     };
-    cpu_physical_memory_write(dsm_mem_addr, &out, sizeof(out));
+    nvdimm_copy_to_dsm_mem(dsm_mem_addr, &out, sizeof(out));
 }
 
 #define NVDIMM_DSM_RET_STATUS_SUCCESS        0 /* Success */
@@ -569,7 +599,7 @@ exit:
     read_fit_out->func_ret_status = cpu_to_le32(func_ret_status);
     memcpy(read_fit_out->fit, fit->data + read_fit->offset, read_len);
 
-    cpu_physical_memory_write(dsm_mem_addr, read_fit_out, size);
+    nvdimm_copy_to_dsm_mem(dsm_mem_addr, read_fit_out, size);
 
     g_free(read_fit_out);
 }
@@ -655,8 +685,8 @@ static void nvdimm_dsm_label_size(NVDIMMDevice *nvdimm, hwaddr dsm_mem_addr)
     label_size_out.label_size = cpu_to_le32(label_size);
     label_size_out.max_xfer = cpu_to_le32(mxfer);
 
-    cpu_physical_memory_write(dsm_mem_addr, &label_size_out,
-                              sizeof(label_size_out));
+    nvdimm_copy_to_dsm_mem(dsm_mem_addr, &label_size_out,
+                           sizeof(label_size_out));
 }
 
 static uint32_t nvdimm_rw_label_data_check(NVDIMMDevice *nvdimm,
@@ -721,7 +751,7 @@ static void nvdimm_dsm_get_label_data(NVDIMMDevice *nvdimm, NvdimmDsmIn *in,
     nvc->read_label_data(nvdimm, get_label_data_out->out_buf,
                          get_label_data->length, get_label_data->offset);
 
-    cpu_physical_memory_write(dsm_mem_addr, get_label_data_out, size);
+    nvdimm_copy_to_dsm_mem(dsm_mem_addr, get_label_data_out, size);
     g_free(get_label_data_out);
 }
 
@@ -831,7 +861,7 @@ nvdimm_dsm_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
      * this by copying DSM memory to QEMU local memory.
      */
     in = g_new(NvdimmDsmIn, 1);
-    cpu_physical_memory_read(dsm_mem_addr, in, sizeof(*in));
+    nvdimm_copy_from_dsm_mem(dsm_mem_addr, in, sizeof(*in));
 
     le32_to_cpus(&in->revision);
     le32_to_cpus(&in->function);
