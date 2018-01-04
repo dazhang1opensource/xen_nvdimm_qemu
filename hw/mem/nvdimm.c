@@ -27,6 +27,7 @@
 #include "qapi/visitor.h"
 #include "qapi-visit.h"
 #include "hw/mem/nvdimm.h"
+#include "hw/xen/xen.h"
 
 static void nvdimm_get_label_size(Object *obj, Visitor *v, const char *name,
                                   void *opaque, Error **errp)
@@ -106,6 +107,7 @@ static MemoryRegion *nvdimm_get_memory_region(PCDIMMDevice *dimm, Error **errp)
 
 static void nvdimm_realize(PCDIMMDevice *dimm, Error **errp)
 {
+    HostMemoryBackend *hostmem = dimm->hostmem;
     MemoryRegion *mr = host_memory_backend_get_memory(dimm->hostmem, errp);
     NVDIMMDevice *nvdimm = NVDIMM(dimm);
     uint64_t align, pmem_size, size = memory_region_size(mr);
@@ -121,12 +123,21 @@ static void nvdimm_realize(PCDIMMDevice *dimm, Error **errp)
      * (i.e. label_size is zero here), let's not initialize of the
      * pointer to label data if the label size is zero.
      */
-    if (nvdimm->label_size)
+    if (!xen_enabled()) {
         nvdimm->label_data = memory_region_get_ram_ptr(mr) + pmem_size;
+    } else {
+        uint64_t host_addr =
+            object_property_get_uint(OBJECT(hostmem), "host-addr", &local_err);
+
+        if (local_err) {
+            goto out;
+        }
+
+        nvdimm->label_host_addr = host_addr + pmem_size;
+    }
     pmem_size = QEMU_ALIGN_DOWN(pmem_size, align);
 
     if (size <= nvdimm->label_size || !pmem_size) {
-        HostMemoryBackend *hostmem = dimm->hostmem;
         char *path = object_get_canonical_path_component(OBJECT(hostmem));
 
         error_setg(&local_err, "the size of memdev %s (0x%" PRIx64 ") is too "
@@ -160,6 +171,11 @@ static void nvdimm_read_label_data(NVDIMMDevice *nvdimm, void *buf,
 {
     nvdimm_validate_rw_label_data(nvdimm, size, offset);
 
+    if (xen_enabled()) {
+        xen_read_host_pmem(nvdimm->label_host_addr + offset, buf, size);
+        return;
+    }
+
     memcpy(buf, nvdimm->label_data + offset, size);
 }
 
@@ -171,6 +187,11 @@ static void nvdimm_write_label_data(NVDIMMDevice *nvdimm, const void *buf,
     uint64_t backend_offset;
 
     nvdimm_validate_rw_label_data(nvdimm, size, offset);
+
+    if (xen_enabled()) {
+        xen_write_host_pmem(nvdimm->label_host_addr + offset, buf, size);
+        return;
+    }
 
     memcpy(nvdimm->label_data + offset, buf, size);
 

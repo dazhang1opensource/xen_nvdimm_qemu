@@ -76,3 +76,8 @@ size_t xen_copy_from_guest(ram_addr_t gpa, void *buf, size_t length)
 {
     return 0;
 }
+
+int xen_rw_host_pmem(ram_addr_t hpa, void *buf, size_t length, bool is_write)
+{
+    return -ENOSYS;
+}

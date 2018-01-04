@@ -63,12 +63,19 @@ struct NVDIMMDevice {
      */
     uint64_t label_size;
 
-    /*
-     * the address of label data which is read by __DSM "Get Namespace
-     * Label Data" function and written by __DSM "Set Namespace Label
-     * Data" function.
-     */
-    void *label_data;
+    union {
+        /*
+         * the address of label data which is read by __DSM "Get Namespace
+         * Label Data" function and written by __DSM "Set Namespace Label
+         * Data" function.
+         */
+        void *label_data;
+
+        /*
+         * Used for Xen HVM domain.
+         */
+        uint64_t label_host_addr;
+    };
 
     /*
      * it's the PMEM region in NVDIMM device, which is presented to

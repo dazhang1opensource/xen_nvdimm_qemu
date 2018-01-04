@@ -1558,3 +1558,8 @@ size_t xen_copy_from_guest(ram_addr_t gpa, void *buf, size_t length)
 {
     return xen_rw_guest(gpa, buf, length, false);
 }
+
+int xen_rw_host_pmem(ram_addr_t hpa, void *buf, size_t length, bool is_write)
+{
+    return xc_nvdimm_pmem_rw(xen_xc, xen_domid, hpa, buf, length, is_write);
+}
