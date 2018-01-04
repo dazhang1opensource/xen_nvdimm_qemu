@@ -55,4 +55,10 @@ void xen_acpi_build(AcpiBuildTables *tables, GArray *table_offsets,
 size_t xen_copy_to_guest(ram_addr_t gpa, void *buf, size_t length);
 size_t xen_copy_from_guest(ram_addr_t gpa, void *buf, size_t length);
 
+int xen_rw_host_pmem(ram_addr_t hpa, void *buf, size_t length, bool is_write);
+#define xen_read_host_pmem(hpa, buf, len) \
+    xen_rw_host_pmem((hpa), (buf), (len), false)
+#define xen_write_host_pmem(hpa, buf, len) \
+    xen_rw_host_pmem((hpa), (void *)(buf), (len), true)
+
 #endif /* QEMU_HW_XEN_H */
