@@ -2829,6 +2829,14 @@ static void acpi_ram_update(MemoryRegion *mr, GArray *data)
 {
     uint32_t size = acpi_data_len(data);
 
+    /*
+     * When used with MachineClass whose rom_file_has_mr == false
+     * (e.g., xenfv), no memory region is created for ROM files.
+     */
+    if (!mr) {
+        return;
+    }
+
     /* Make sure RAM size is correct - in case it got changed e.g. by migration */
     memory_region_ram_resize(mr, size, &error_abort);
 
@@ -2919,7 +2927,8 @@ void acpi_setup(void)
     build_state->table_mr = acpi_add_rom_blob(build_state, tables.table_data,
                                                ACPI_BUILD_TABLE_FILE,
                                                ACPI_BUILD_TABLE_MAX_SIZE);
-    assert(build_state->table_mr != NULL);
+    assert(!MACHINE_CLASS(pcmc)->rom_file_has_mr ||
+           build_state->table_mr != NULL);
 
     build_state->linker_mr =
         acpi_add_rom_blob(build_state, tables.linker->cmd_blob,
